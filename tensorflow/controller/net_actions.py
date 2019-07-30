@@ -14,6 +14,33 @@ class NetActions:
         self.net = nd.load_module(os.path.join(net_dir, 'net.py'))
         self.net_dir = net_dir
 
+        height = 480
+        width = 640
+
+        tf.reset_default_graph()
+        last_evo, current_evo = nd.evo_manager.get_status()
+        self.env = self.net.get_env()
+        print('Evolution: ' + last_evo.path())
+
+        self.eval_out = self.env.make_eval_graph(
+            width = width,
+            height = height,
+        )
+
+        self.session = self._create_session()
+        self.trainer = SimpleTrainer(session=self.session, train_dir=last_evo.path())
+        self.session.run(tf.global_variables_initializer())
+
+        ignore_vars = []
+        if len(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="copy")) > 0:
+            ignore_vars = [tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="copy")[0]]
+        state = last_evo.last_state()
+        self.trainer.load_checkpoint(state.path(), ignore_vars=ignore_vars)
+
+        placeholders = tf.get_collection('placeholders')
+        self.img0 = placeholders[0]
+        self.img1 = placeholders[1]
+
     def _check_evo_manager_init(self):
         if (len(nd.evo_manager.evolutions()) == 0):
             raise ValueError('Evolutions are empty. Make sure evo manager has correctly loaded config.py in your network directory')
@@ -39,33 +66,13 @@ class NetActions:
         nd.phase = 'test'
         if isinstance(image_0, str): image_0=read(image_0).transpose(2, 0, 1)[np.newaxis, :, :, :].astype(np.float32)
         if isinstance(image_1, str): image_1=read(image_1).transpose(2, 0, 1)[np.newaxis, :, :, :].astype(np.float32)
-        tf.reset_default_graph()
         height = image_0.shape[2]
         width = image_0.shape[3]
-        last_evo, current_evo = nd.evo_manager.get_status()
-        env = self.net.get_env()
-        print('Evolution: ' + last_evo.path())
-        eval_out = env.make_eval_graph(
-                                        width = width,
-                                        height = height,
-                                        )
-        session = self._create_session()
-        trainer = SimpleTrainer(session=session, train_dir=last_evo.path())
-        session.run(tf.global_variables_initializer())
-        ignore_vars = []
-        if len(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="copy")) > 0:
-            ignore_vars = [tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="copy")[0]]
-        if state is None:
-            state = last_evo.last_state()
-            trainer.load_checkpoint(state.path(), ignore_vars=ignore_vars)
-        else:
-            state = nd.evo_manager.get_state(state)
-            trainer.load_checkpoint(state.path(), ignore_vars=ignore_vars)
-        placeholders = tf.get_collection('placeholders')
-        img0 = placeholders[0]
-        img1 = placeholders[1]
-        out = session.run(eval_out.get_list(), feed_dict={ img0: image_0,
-                                                           img1: image_1})
+        print(f'Height: {height} Width: {width}')
+
+
+        out = self.session.run(self.eval_out.get_list(), feed_dict={ self.img0: image_0,
+                                                                self.img1: image_1})
         return out
 
 
