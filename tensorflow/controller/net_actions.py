@@ -47,6 +47,7 @@ class NetActions:
 
     def _create_session(self):
         config = tf.ConfigProto(log_device_placement=False)
+        config.gpu_options.allow_growth = True
         session = tf.Session(config = config)
         return session
 
